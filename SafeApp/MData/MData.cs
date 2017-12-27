@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using JetBrains.Annotations;
@@ -13,10 +14,11 @@ namespace SafeApp.MData {
   public static class MData {
     private static readonly IAppBindings AppBindings = AppResolver.Current;
 
-    public static Task<(List<byte>, ulong)> GetValueAsync(NativeHandle infoHandle, List<byte> key) {
+    public static Task<(List<byte>, ulong)> GetValueAsync(MDataInfo info, List<byte> key) {
       var tcs = new TaskCompletionSource<(List<byte>, ulong)>();
+      var infoPtr = Helpers.StructToPtr(info);
       var keyPtr = key.ToIntPtr();
-      MDataGetValueCb callback = (_, result, dataPtr, dataLen, entryVersion) => {
+      Action<FfiResult, IntPtr, IntPtr, ulong> callback = (result, dataPtr, dataLen, entryVersion) => {
         if (result.ErrorCode != 0) {
           tcs.SetException(result.ToException());
           return;
@@ -26,15 +28,17 @@ namespace SafeApp.MData {
         tcs.SetResult((data, entryVersion));
       };
 
-      AppBindings.MDataGetValue(Session.AppPtr, infoHandle, keyPtr, (IntPtr)key.Count, callback);
+      AppBindings.MDataGetValue(Session.AppPtr, infoPtr, keyPtr, (IntPtr)key.Count, callback);
       Marshal.FreeHGlobal(keyPtr);
+      Marshal.FreeHGlobal(infoPtr);
 
       return tcs.Task;
     }
 
-    public static Task<NativeHandle> ListEntriesAsync(NativeHandle infoHandle) {
+    public static Task<NativeHandle> ListEntriesAsync(MDataInfo info) {
       var tcs = new TaskCompletionSource<NativeHandle>();
-      UlongCb callback = (_, result, mDataEntriesHandle) => {
+      var infoPtr = Helpers.StructToPtr(info);
+      Action<FfiResult, ulong> callback = (result, mDataEntriesHandle) => {
         if (result.ErrorCode != 0) {
           tcs.SetException(result.ToException());
           return;
@@ -43,30 +47,33 @@ namespace SafeApp.MData {
         tcs.SetResult(new NativeHandle(mDataEntriesHandle, MDataEntries.FreeAsync));
       };
 
-      AppBindings.MDataListEntries(Session.AppPtr, infoHandle, callback);
+      AppBindings.MDataListEntries(Session.AppPtr, infoPtr, callback);
+      Marshal.FreeHGlobal(infoPtr);
 
       return tcs.Task;
     }
 
-    public static Task<NativeHandle> ListKeysAsync(NativeHandle mDataInfoH) {
-      var tcs = new TaskCompletionSource<NativeHandle>();
-      UlongCb callback = (_, result, mDataEntKeysH) => {
+    public static Task<List<List<byte>>> ListKeysAsync(MDataInfo mDataInfo) {
+      var tcs = new TaskCompletionSource<List<List<byte>>>();
+      var infoPtr = Helpers.StructToPtr(mDataInfo);
+      Action<FfiResult, List<MDataKeyFfi>> callback = (result, mDataKeys) => {
         if (result.ErrorCode != 0) {
           tcs.SetException(result.ToException());
           return;
         }
 
-        tcs.SetResult(new NativeHandle(mDataEntKeysH, MDataKeys.FreeAsync));
+        tcs.SetResult(mDataKeys.Select(k => k.DataPtr.ToList<byte>(k.Len)).ToList());
       };
 
-      AppBindings.MDataListKeys(Session.AppPtr, mDataInfoH, callback);
-
+      AppBindings.MDataListKeys(Session.AppPtr, infoPtr, callback);
+      Marshal.FreeHGlobal(infoPtr);
       return tcs.Task;
     }
 
-    public static Task MutateEntriesAsync(NativeHandle mDataInfoH, NativeHandle entryActionsH) {
+    public static Task MutateEntriesAsync(MDataInfo mDataInfo, NativeHandle entryActionsH) {
       var tcs = new TaskCompletionSource<object>();
-      ResultCb callback = (_, result) => {
+      var infoPtr = Helpers.StructToPtr(mDataInfo);
+      Action<FfiResult> callback = result => {
         if (result.ErrorCode != 0) {
           tcs.SetException(result.ToException());
           return;
@@ -75,14 +82,14 @@ namespace SafeApp.MData {
         tcs.SetResult(null);
       };
 
-      AppBindings.MDataMutateEntries(Session.AppPtr, mDataInfoH, entryActionsH, callback);
-
+      AppBindings.MDataMutateEntries(Session.AppPtr, infoPtr, entryActionsH, callback);
+      Marshal.FreeHGlobal(infoPtr);
       return tcs.Task;
     }
 
-    public static Task PutAsync(NativeHandle mDataInfoH, NativeHandle permissionsH, NativeHandle entriesH) {
+    public static Task PutAsync(MDataInfo mDataInfo, NativeHandle permissionsH, NativeHandle entriesH) {
       var tcs = new TaskCompletionSource<object>();
-      ResultCb callback = (_, result) => {
+      Action<FfiResult> callback = result => {
         if (result.ErrorCode != 0) {
           tcs.SetException(result.ToException());
           return;
@@ -90,8 +97,8 @@ namespace SafeApp.MData {
 
         tcs.SetResult(null);
       };
-
-      AppBindings.MDataPut(Session.AppPtr, mDataInfoH, permissionsH, entriesH, callback);
+      var infoPtr = Helpers.StructToPtr(mDataInfo);
+      AppBindings.MDataPut(Session.AppPtr, infoPtr, permissionsH, entriesH, callback);
 
       return tcs.Task;
     }

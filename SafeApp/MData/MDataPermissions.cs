@@ -1,3 +1,5 @@
+using System;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using JetBrains.Annotations;
 using SafeApp.AppBindings;
@@ -12,7 +14,7 @@ namespace SafeApp.MData {
 
     public static Task FreeAsync(ulong permissionsH) {
       var tcs = new TaskCompletionSource<object>();
-      ResultCb callback = (_, result) => {
+      Action<FfiResult> callback = result => {
         if (result.ErrorCode != 0) {
           tcs.SetException(result.ToException());
           return;
@@ -26,10 +28,11 @@ namespace SafeApp.MData {
       return tcs.Task;
     }
 
-    public static Task InsertAsync(NativeHandle permissionsH, NativeHandle forUserH, NativeHandle permissionSetH) {
+    public static Task InsertAsync(NativeHandle permissionsH, NativeHandle forUserH, PermissionSet permissionSet) {
       var tcs = new TaskCompletionSource<object>();
+      var permissionSetPtr = Helpers.StructToPtr(permissionSet);
 
-      ResultCb callback = (_, result) => {
+      Action<FfiResult> callback = result => {
         if (result.ErrorCode != 0) {
           tcs.SetException(result.ToException());
           return;
@@ -38,7 +41,8 @@ namespace SafeApp.MData {
         tcs.SetResult(null);
       };
 
-      AppBindings.MDataPermissionsInsert(Session.AppPtr, permissionsH, forUserH, permissionSetH, callback);
+      AppBindings.MDataPermissionsInsert(Session.AppPtr, permissionsH, forUserH, permissionSetPtr, callback);
+      Marshal.FreeHGlobal(permissionSetPtr);
 
       return tcs.Task;
     }
@@ -46,7 +50,7 @@ namespace SafeApp.MData {
     public static Task<NativeHandle> NewAsync() {
       var tcs = new TaskCompletionSource<NativeHandle>();
 
-      UlongCb callback = (_, result, permissionsH) => {
+      Action<FfiResult, ulong> callback = (result, permissionsH) => {
         if (result.ErrorCode != 0) {
           tcs.SetException(result.ToException());
           return;

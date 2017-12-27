@@ -12,7 +12,7 @@ namespace SafeApp.Tests {
         Assert.NotNull(handle);
       }
     }
-
+    /*
     [Test]
     public async Task NewAssymmetric() {
       Utils.InitialiseSessionForRandomTestApp();
@@ -22,7 +22,7 @@ namespace SafeApp.Tests {
       }
       await Crypto.EncPubKeyFreeAsync(encKeyPairTuple.Item1);
       await Crypto.EncSecretKeyFreeAsync(encKeyPairTuple.Item2);
-    }
+    }*/
 
     [Test]
     public async Task NewSymmetric() {

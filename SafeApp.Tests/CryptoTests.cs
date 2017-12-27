@@ -51,13 +51,14 @@ namespace SafeApp.Tests {
       var encKeyPairTuple = await Crypto.EncGenerateKeyPairAsync();
       Assert.NotNull(encKeyPairTuple.Item1);
       Assert.NotNull(encKeyPairTuple.Item2);
-      var plainBytes = new byte[1024];
-      new Random().NextBytes(plainBytes);
-      var cipherBytes = await Crypto.EncryptSealedBoxAsync(plainBytes.ToList(), encKeyPairTuple.Item1);
-      var decryptedBytes = await Crypto.DecryptSealedBoxAsync(cipherBytes, encKeyPairTuple.Item1, encKeyPairTuple.Item2);
-      Assert.AreEqual(plainBytes, decryptedBytes);
-      await Crypto.EncPubKeyFreeAsync(encKeyPairTuple.Item1);
-      await Crypto.EncSecretKeyFreeAsync(encKeyPairTuple.Item2);
+      using (encKeyPairTuple.Item1)
+      using (encKeyPairTuple.Item2) {
+        var plainBytes = new byte[1024];
+        new Random().NextBytes(plainBytes);
+        var cipherBytes = await Crypto.EncryptSealedBoxAsync(plainBytes.ToList(), encKeyPairTuple.Item1);
+        var decryptedBytes = await Crypto.DecryptSealedBoxAsync(cipherBytes, encKeyPairTuple.Item1, encKeyPairTuple.Item2);
+        Assert.AreEqual(plainBytes, decryptedBytes);
+      }
     }
   }
 }

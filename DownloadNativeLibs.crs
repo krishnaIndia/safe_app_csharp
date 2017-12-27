@@ -25,7 +25,7 @@ use std::thread;
 use std::time::Duration;
 use zip::ZipArchive;
 
-const TAG: &'static str = "v0.4.0";
+const TAG: &'static str = "8aa35d4";
 const ANDROID_DIR_NAME: &'static str = "SafeApp.AppBindings.Android";
 const IOS_DIR_NAME: &'static str = "SafeApp.AppBindings.iOS";
 const DESKTOP_DIR_NAME: &'static str = "SafeApp.AppBindings.Desktop";

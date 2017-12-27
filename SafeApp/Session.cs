@@ -16,7 +16,15 @@ namespace SafeApp {
     private static volatile bool _isDisconnected;
     private static readonly IAppBindings AppBindings = AppResolver.Current;
 
-    private static readonly IntCb NetObs;
+    private static readonly Action OnDisconnectedCb;
+
+    private static readonly Action OnDisconnectedObserverCb = () => {
+      Debug.WriteLine("Network Disconnected Fired");
+
+      IsDisconnected = true;
+      OnDisconnected(EventArgs.Empty);
+    };
+
     public static bool IsDisconnected { get => _isDisconnected; private set => _isDisconnected = value; }
 
     public static IntPtr AppPtr {
@@ -41,7 +49,7 @@ namespace SafeApp {
 
     static Session() {
       AppPtr = IntPtr.Zero;
-      NetObs = OnNetworkObserverCb;
+      OnDisconnectedCb = OnDisconnectedObserverCb;
     }
 
     public static Task<bool> AppRegisteredAsync(string appId, AuthGranted authGranted) {
@@ -56,7 +64,7 @@ namespace SafeApp {
           };
           var authGrantedFfiPtr = Helpers.StructToPtr(authGrantedFfi);
 
-          IntPtrCb callback = (_, result, appPtr) => {
+          Action<FfiResult, IntPtr> callback = (result, appPtr) => {
             if (result.ErrorCode != 0) {
               tcs.SetException(result.ToException());
               return;
@@ -67,7 +75,7 @@ namespace SafeApp {
             tcs.SetResult(true);
           };
 
-          AppBindings.AppRegistered(appId, authGrantedFfiPtr, NetObs, callback);
+          AppBindings.AppRegistered(appId, authGrantedFfiPtr, OnDisconnectedCb, callback);
           Marshal.FreeHGlobal(authGrantedFfi.BootStrapConfigPtr);
           Marshal.FreeHGlobal(authGrantedFfiPtr);
 
@@ -80,7 +88,7 @@ namespace SafeApp {
         () => {
           var tcs = new TaskCompletionSource<DecodeIpcResult>();
 
-          DecodeAuthCb authCb = (_, id, authGrantedFfiPtr) => {
+          Action<uint, IntPtr> authCb = (id, authGrantedFfiPtr) => {
             var authGrantedFfi = Marshal.PtrToStructure<AuthGrantedFfi>(authGrantedFfiPtr);
             var authGranted = new AuthGranted {
               AppKeys = authGrantedFfi.AppKeys,
@@ -90,13 +98,120 @@ namespace SafeApp {
 
             tcs.SetResult(new DecodeIpcResult {AuthGranted = authGranted});
           };
-          DecodeUnregCb unregCb = (_, id, config, size) => { tcs.SetResult(new DecodeIpcResult {UnRegAppInfo = (config, size)}); };
-          DecodeContCb contCb = (_, id) => { tcs.SetResult(new DecodeIpcResult {ContReqId = id}); };
-          DecodeShareMDataCb shareMDataCb = (_, id) => { tcs.SetResult(new DecodeIpcResult {ShareMData = id}); };
-          DecodeRevokedCb revokedCb = _ => { tcs.SetResult(new DecodeIpcResult {Revoked = true}); };
-          ListBasedResultCb errorCb = (_, result) => { tcs.SetException(result.ToException()); };
+          Action<uint, IntPtr, IntPtr> unregCb = (id, config, size) => {
+            tcs.SetResult(new DecodeIpcResult {UnRegAppInfo = (config, size)});
+          };
+          Action<uint> contCb = id => { tcs.SetResult(new DecodeIpcResult {ContReqId = id}); };
+          Action<uint> shareMDataCb = id => { tcs.SetResult(new DecodeIpcResult {ShareMData = id}); };
+          Action revokedCb = () => { tcs.SetResult(new DecodeIpcResult {Revoked = true}); };
+          Action<FfiResult> errorCb = result => { tcs.SetException(result.ToException()); };
 
           AppBindings.DecodeIpcMessage(encodedReq, authCb, unregCb, contCb, shareMDataCb, revokedCb, errorCb);
+
+          return tcs.Task;
+        });
+    }
+
+    public static Task<string> EncodeUnregisteredRequestAsync(string appId) {
+      return Task.Run(
+        () => {
+          var tcs = new TaskCompletionSource<string>();
+          Action<FfiResult, uint, string> callback = (result, id, req) => {
+            if (result.ErrorCode != 0)
+            {
+              tcs.SetException(result.ToException());
+              return;
+            }
+
+            tcs.SetResult(req);
+          };
+          AppBindings.EncodeUnregisteredReq(appId, (IntPtr) appId.Length, callback);
+          return tcs.Task;
+        });
+    }
+
+    public static Task<string> EncodeContainerRequestAsync(ContainerReq containerReq)
+    {
+      return Task.Run(
+        () => {
+          var tcs = new TaskCompletionSource<string>();
+          if (containerReq.Containers == null)
+          {
+            tcs.SetException(new ArgumentNullException($"{nameof(containerReq.Containers)} cannot be null"));
+            return tcs.Task;
+          }
+          if (string.IsNullOrEmpty(containerReq.AppExchangeInfo.Name) || string.IsNullOrEmpty(containerReq.AppExchangeInfo.Id) ||
+              string.IsNullOrEmpty(containerReq.AppExchangeInfo.Vendor))
+          {
+            tcs.SetException(
+              new ArgumentException(
+                $"{nameof(containerReq.AppExchangeInfo.Name)}, {nameof(containerReq.AppExchangeInfo.Id)}, {nameof(containerReq.AppExchangeInfo.Vendor)} fields are mandatory for AppExchageInfo"));
+            return tcs.Task;
+          }
+          var containerReqFfi = new ContainerReqFfi
+          {
+            AppExchangeInfo = containerReq.AppExchangeInfo,
+            ContainersLen = (IntPtr)containerReq.Containers.Count,
+            ContainersArrayPtr = containerReq.Containers.ToIntPtr()
+          };
+          var authReqFfiPtr = Helpers.StructToPtr(containerReqFfi);
+          Action<FfiResult, uint, string> callback = (result, id, req) => {
+            if (result.ErrorCode != 0)
+            {
+              tcs.SetException(result.ToException());
+              return;
+            }
+
+            tcs.SetResult(req);
+          };
+
+          AppBindings.EncodeContainerReq(authReqFfiPtr, callback);
+          Marshal.FreeHGlobal(containerReqFfi.ContainersArrayPtr);
+          Marshal.FreeHGlobal(authReqFfiPtr);
+
+          return tcs.Task;
+        });
+    }
+
+    public static Task<string> EncodeShareMDataRequestAsync(ShareMDataReq shareMDataReq)
+    {
+      return Task.Run(
+        () => {
+          var tcs = new TaskCompletionSource<string>();
+          if (shareMDataReq.ShareMData == null)
+          {
+            tcs.SetException(new ArgumentNullException($"{nameof(shareMDataReq.ShareMData)} cannot be null"));
+            return tcs.Task;
+          }
+          if (string.IsNullOrEmpty(shareMDataReq.AppExchangeInfo.Name) || string.IsNullOrEmpty(shareMDataReq.AppExchangeInfo.Id) ||
+              string.IsNullOrEmpty(shareMDataReq.AppExchangeInfo.Vendor))
+          {
+            tcs.SetException(
+              new ArgumentException(
+                $"{nameof(shareMDataReq.AppExchangeInfo.Name)}, {nameof(shareMDataReq.AppExchangeInfo.Id)}, {nameof(shareMDataReq.AppExchangeInfo.Vendor)} fields are mandatory for AppExchageInfo"));
+            return tcs.Task;
+          }
+
+          var shareMDataReqFfi = new ShareMDataReqFfi
+          {
+            AppExchangeInfo = shareMDataReq.AppExchangeInfo,
+            ShareMDataPtr = shareMDataReq.ShareMData.ToHandlePtr(),
+            ShareMDataLen = (IntPtr) shareMDataReq.ShareMData.Count
+          };
+          var shareMDataReqFfiPtr = Helpers.StructToPtr(shareMDataReqFfi);
+          Action<FfiResult, uint, string> callback = (result, id, req) => {
+            if (result.ErrorCode != 0)
+            {
+              tcs.SetException(result.ToException());
+              return;
+            }
+
+            tcs.SetResult(req);
+          };
+
+          AppBindings.EncodeShareMDataReq(shareMDataReqFfiPtr, callback);
+          Marshal.FreeHGlobal(shareMDataReqFfi.ShareMDataPtr);
+          Marshal.FreeHGlobal(shareMDataReqFfiPtr);
 
           return tcs.Task;
         });
@@ -124,7 +239,7 @@ namespace SafeApp {
             ContainersArrayPtr = authReq.Containers.ToIntPtr()
           };
           var authReqFfiPtr = Helpers.StructToPtr(authReqFfi);
-          EncodeAuthReqCb callback = (_, result, id, req) => {
+          Action<FfiResult, uint, string> callback = (result, id, req) => {
             if (result.ErrorCode != 0) {
               tcs.SetException(result.ToException());
               return;
@@ -151,7 +266,7 @@ namespace SafeApp {
         () => {
           var tcs = new TaskCompletionSource<bool>();
 
-          ResultCb cb2 = (_, result) => {
+          Action<FfiResult> cb2 = result => {
             if (result.ErrorCode != 0) {
               tcs.SetException(result.ToException());
               return;
@@ -160,7 +275,7 @@ namespace SafeApp {
             tcs.SetResult(true);
           };
 
-          ResultCb cb1 = (_, result) => {
+          Action<FfiResult> cb1 = result => {
             if (result.ErrorCode != 0) {
               tcs.SetException(result.ToException());
               return;
@@ -176,22 +291,6 @@ namespace SafeApp {
 
     private static void OnDisconnected(EventArgs e) {
       Disconnected?.Invoke(null, e);
-    }
-
-    /// <summary>
-    ///   Network State Callback
-    /// </summary>
-    /// <param name="self">Self Ptr</param>
-    /// <param name="result">Event Result</param>
-    /// <param name="eventType">0 : Connected. -1 : Disconnected</param>
-    private static void OnNetworkObserverCb(IntPtr self, FfiResult result, int eventType) {
-      Debug.WriteLine("Network Observer Fired");
-      if (result.ErrorCode != 0 || eventType != -1) {
-        return;
-      }
-
-      IsDisconnected = true;
-      OnDisconnected(EventArgs.Empty);
     }
   }
 }

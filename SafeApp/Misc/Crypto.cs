@@ -16,7 +16,7 @@ namespace SafeApp.Misc {
 
     public static Task<NativeHandle> AppPubSignKeyAsync() {
       var tcs = new TaskCompletionSource<NativeHandle>();
-      UlongCb callback = (_, result, appPubSignKeyH) => {
+      Action<FfiResult, ulong> callback = (result, appPubSignKeyH) => {
         if (result.ErrorCode != 0) {
           tcs.SetException(result.ToException());
           return;
@@ -33,7 +33,7 @@ namespace SafeApp.Misc {
     public static Task<List<byte>> DecryptSealedBoxAsync(List<byte> cipherText, NativeHandle pkHandle, NativeHandle skHandle) {
       var tcs = new TaskCompletionSource<List<byte>>();
       var cipherPtr = cipherText.ToIntPtr();
-      ByteArrayCb callback = (_, result, dataPtr, dataLen) => {
+      Action<FfiResult, IntPtr, IntPtr> callback = (result, dataPtr, dataLen) => {
         if (result.ErrorCode != 0) {
           tcs.SetException(result.ToException());
           return;
@@ -52,7 +52,7 @@ namespace SafeApp.Misc {
 
     public static Task<(NativeHandle, NativeHandle)> EncGenerateKeyPairAsync() {
       var tcs = new TaskCompletionSource<(NativeHandle, NativeHandle)>();
-      EncGenerateKeyPairCb callback = (_, result, encPubKeyH, encSecKeyH) => {
+      Action<FfiResult, ulong, ulong> callback = (result, encPubKeyH, encSecKeyH) => {
         if (result.ErrorCode != 0) {
           tcs.SetException(result.ToException());
           return;
@@ -68,7 +68,7 @@ namespace SafeApp.Misc {
 
     public static Task EncPubKeyFreeAsync(ulong encPubKeyH) {
       var tcs = new TaskCompletionSource<object>();
-      ResultCb callback = (_, result) => {
+      Action<FfiResult> callback = result => {
         if (result.ErrorCode != 0) {
           tcs.SetException(result.ToException());
           return;
@@ -84,7 +84,7 @@ namespace SafeApp.Misc {
 
     public static Task<List<byte>> EncPubKeyGetAsync(NativeHandle encPubKeyH) {
       var tcs = new TaskCompletionSource<List<byte>>();
-      IntPtrCb callback = (_, result, encPubKeyPtr) => {
+      Action<FfiResult, IntPtr> callback = (result, encPubKeyPtr) => {
         if (result.ErrorCode != 0) {
           tcs.SetException(result.ToException());
           return;
@@ -101,7 +101,7 @@ namespace SafeApp.Misc {
     public static Task<NativeHandle> EncPubKeyNewAsync(List<byte> asymPublicKeyBytes) {
       var tcs = new TaskCompletionSource<NativeHandle>();
       var asymPublicKeyPtr = asymPublicKeyBytes.ToIntPtr();
-      UlongCb callback = (self, result, encryptPubKeyHandle) => {
+      Action<FfiResult, ulong> callback = (result, encryptPubKeyHandle) => {
         if (result.ErrorCode != 0) {
           tcs.SetException(result.ToException());
           return;
@@ -119,7 +119,7 @@ namespace SafeApp.Misc {
     public static Task<List<byte>> EncryptSealedBoxAsync(List<byte> inputData, NativeHandle pkHandle) {
       var tcs = new TaskCompletionSource<List<byte>>();
       var inputDataPtr = inputData.ToIntPtr();
-      ByteArrayCb callback = (_, result, dataPtr, dataLen) => {
+      Action<FfiResult, IntPtr, IntPtr> callback = (result, dataPtr, dataLen) => {
         if (result.ErrorCode != 0) {
           tcs.SetException(result.ToException());
           return;
@@ -136,7 +136,7 @@ namespace SafeApp.Misc {
 
     public static Task EncSecretKeyFreeAsync(ulong encSecKeyH) {
       var tcs = new TaskCompletionSource<object>();
-      ResultCb callback = (_, result) => {
+      Action<FfiResult> callback = result => {
         if (result.ErrorCode != 0) {
           tcs.SetException(result.ToException());
           return;
@@ -152,7 +152,7 @@ namespace SafeApp.Misc {
 
     public static Task<List<byte>> EncSecretKeyGetAsync(NativeHandle encSecKeyH) {
       var tcs = new TaskCompletionSource<List<byte>>();
-      IntPtrCb callback = (_, result, encSecKeyPtr) => {
+      Action<FfiResult, IntPtr> callback = (result, encSecKeyPtr) => {
         if (result.ErrorCode != 0) {
           tcs.SetException(result.ToException());
           return;
@@ -169,7 +169,7 @@ namespace SafeApp.Misc {
     public static Task<NativeHandle> EncSecretKeyNewAsync(List<byte> asymSecKeyBytes) {
       var tcs = new TaskCompletionSource<NativeHandle>();
       var asymSecKeyPtr = asymSecKeyBytes.ToIntPtr();
-      UlongCb callback = (_, result, encSecKeyHandle) => {
+      Action<FfiResult, ulong> callback = (result, encSecKeyHandle) => {
         if (result.ErrorCode != 0) {
           tcs.SetException(result.ToException());
           return;
@@ -185,17 +185,18 @@ namespace SafeApp.Misc {
 
     public static Task SignKeyFreeAsync(ulong signKeyHandle) {
       var tcs = new TaskCompletionSource<object>();
-      ResultCb callback = (_, result) => {
-        if (result.ErrorCode != 0) {
-          tcs.SetException(result.ToException());
-          return;
-        }
+//      Action<FfiResult> callback = result => {
+//        if (result.ErrorCode != 0) {
+//          tcs.SetException(result.ToException());
+//          return;
+//        }
+//
+//        tcs.SetResult(null);
+//      };
+//
+//      AppBindings.SignKeyFree(Session.AppPtr, signKeyHandle, callback);
 
-        tcs.SetResult(null);
-      };
-
-      AppBindings.SignKeyFree(Session.AppPtr, signKeyHandle, callback);
-
+      tcs.SetResult(null);
       return tcs.Task;
     }
   }
