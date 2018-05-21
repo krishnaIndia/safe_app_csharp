@@ -23,7 +23,7 @@ install:
         $url = "https://github.com/maidsafe/QA/raw/master/appveyor/install_rustup.ps1"
         Invoke-WebRequest $url -OutFile "install_rustup.ps1"
         $url2 = "https://github.com/fraser999/QA/raw/master/appveyor/cargo-script.exe"
-        Invoke-WebRequest $url -OutFile "cargo-script.exe"
+        Invoke-WebRequest $url2 -OutFile "cargo-script.exe"
         . ".\install_rustup.ps1"
   - cargo-script.exe DownloadNativeLibs.crs
 
