@@ -1,6 +1,6 @@
 environment:
   matrix:
-    - RUST_TOOLCHAIN: 1.22.1
+    - RUST_TOOLCHAIN: 1.24.0
 
 cache:
   - '%USERPROFILE%\.cargo'
