@@ -24,7 +24,7 @@ install:
         Invoke-WebRequest $url -OutFile "install_rustup.ps1"
         . ".\install_rustup.ps1"
   - bash -lc "curl -sSL https://github.com/maidsafe/QA/raw/master/travis/cargo_install.sh > cargo_install.sh"
-  - bash -lc "PATH=/c/msys64/mingw64/bin:/c/msys64/usr/bin:$PATH; bash cargo_install.sh cargo-script"
+  - bash -lc "PATH=/c/msys64/mingw64/bin:/c/msys64/usr/bin:$PATH; pacman -Sy mingw-w64-x86_64-crt-git --noconfirm && bash cargo_install.sh cargo-script"
   - cargo script DownloadNativeLibs.crs
 
 platform:
