@@ -22,10 +22,10 @@ install:
   - ps: |
         $url = "https://github.com/maidsafe/QA/raw/master/appveyor/install_rustup.ps1"
         Invoke-WebRequest $url -OutFile "install_rustup.ps1"
+        $url2 = "https://github.com/fraser999/QA/raw/master/appveyor/cargo-script.exe"
+        Invoke-WebRequest $url -OutFile "cargo-script.exe"
         . ".\install_rustup.ps1"
-  - bash -lc "curl -sSL https://github.com/maidsafe/QA/raw/master/travis/cargo_install.sh > cargo_install.sh"
-  - bash -lc "PATH=/c/msys64/mingw64/bin:/c/msys64/usr/bin:$PATH; pacman -Sy mingw-w64-x86_64-headers-git-5.0.0.5002.34a7c1c0-1 --noconfirm && bash cargo_install.sh cargo-script"
-  - cargo script DownloadNativeLibs.crs
+  - cargo-script.exe DownloadNativeLibs.crs
 
 platform:
   - x64
